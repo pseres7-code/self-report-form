@@ -1,0 +1,15 @@
+/* Shared look of every page of the study app: the local site, activity reports and the phone form.
+   Single source of truth. Change colours and base elements here only; the phone form gets a copy
+   through apps/self_report_form/sync_theme.py (a test fails while the copy is stale). */
+:root{--bg:#fff;--fg:#000;--muted:#444;--faint:#666;--line:#ccc;--accent:#f07800;
+--font:system-ui,-apple-system,Segoe UI,sans-serif;--chip-radius:12px}
+body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--font)}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:17px;margin:28px 0 8px;border-bottom:2px solid var(--fg)}
+.sub{color:var(--muted);margin:0 0 16px}
+nav.site{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center;border-bottom:2px solid var(--fg);
+padding:0 0 8px;margin:0 0 16px}nav.site b{margin-right:8px}
+nav.site a,nav.site span{color:var(--fg);text-decoration:none;padding:2px 0}
+nav.site a.on,nav.site span.on{font-weight:700;border-bottom:3px solid var(--fg)}
+.chip{font:inherit;font-size:13px;border:1px solid var(--fg);background:var(--bg);color:var(--fg);
+padding:2px 8px;cursor:pointer;border-radius:var(--chip-radius)}
+.chip.on{background:var(--fg);color:var(--bg)}

@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Napi önbevallás</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* Form-only layout. Colours, fonts and base elements come from theme.css (src/theme/theme.css). */
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  main { max-width: 640px; margin: 0 auto; padding: 16px 16px 112px; }
+  .en { color: var(--muted); font-weight: 400; font-size: .85em; }
+  section.block { margin: 0 0 8px; }
+  section.block h2 { margin-top: 20px; }
+  .item { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .item:last-child { border-bottom: 0; }
+  .item-title { font-weight: 600; }
+  .group { font-weight: 700; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; margin: 14px 0 0; }
+  .desc { color: var(--muted); font-size: 13px; margin: 2px 0 8px; }
+  .scale { display: grid; gap: 6px; }
+  .scale-7 { grid-template-columns: repeat(7, 1fr); }
+  .scale-5 { grid-template-columns: repeat(5, 1fr); }
+  .scale-2 { grid-template-columns: repeat(2, 1fr); }
+  .scale input { position: absolute; opacity: 0; pointer-events: none; }
+  .scale label { display: flex; align-items: center; justify-content: center; min-height: 44px;
+    border: 1px solid var(--fg); border-radius: var(--chip-radius); font-weight: 600; cursor: pointer;
+    user-select: none; background: var(--bg); color: var(--fg); text-align: center; }
+  .scale input:checked + label { background: var(--fg); color: var(--bg); }
+  .scale input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .ends { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px;
+    margin-top: 4px; gap: 8px; }
+  .ends span:last-child { text-align: right; }
+  .extra { margin-top: 8px; display: none; }
+  .extra.show { display: block; }
+  .extra label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .extra input { width: 100%; min-height: 44px; padding: 8px 10px; font: inherit;
+    border: 1px solid var(--fg); background: var(--bg); color: var(--fg); }
+  .missing { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .notice { padding: 6px 10px; font-size: 14px; margin: 10px 0; border-left: 3px solid var(--accent); }
+  .ok { border-left-color: var(--fg); }
+  .err { font-weight: 700; font-size: 14px; min-height: 1.2em; margin: 0 0 6px; }
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--bg);
+    border-top: 2px solid var(--fg); padding: 8px 16px calc(10px + env(safe-area-inset-bottom)); }
+  .bar-inner { max-width: 640px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
+  button { min-height: 48px; font: inherit; font-weight: 700; padding: 0 16px; cursor: pointer;
+    border: 1px solid var(--fg); border-radius: var(--chip-radius); }
+  .primary { background: var(--fg); color: var(--bg); flex: 1; }
+  .secondary { background: var(--bg); color: var(--fg); }
+  .progress { color: var(--muted); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  details summary { cursor: pointer; font-weight: 600; min-height: 32px; }
+  .hist { font-size: 13px; color: var(--muted); }
+  .hist li { margin: 2px 0; }
+  footer { margin-top: 24px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <nav class="site"><b>Triatlon IEQ</b><span class="on">Önbevallás</span></nav>
+  <h1>Napi önbevallás <span class="en">(daily self-report)</span></h1>
+  <p class="sub" id="meta"></p>
+
+  <div class="notice" id="instr">
+    Ébredés után 30 percen belül töltsd ki, <strong>mielőtt megnéznéd a Garmin- vagy az Atmocube-adatot.</strong>
+    Kihagyott nap üresen marad, utólag nem pótolható.
+  </div>
+  <div class="notice" id="late" hidden></div>
+  <div class="notice ok" id="done" hidden></div>
+
+  <form id="f" novalidate>
+    <section class="block" id="srss">
+      <h2>A. Regeneráció és stressz <span class="en">(SRSS)</span></h2>
+      <p class="sub">„Ebben a pillanatban így érzem magam / ilyen vagyok:” <span class="en">(at this moment I feel / I am)</span>.
+        A valaha átélt legjobb regenerációs, illetve legnagyobb stresszállapotodhoz viszonyítva.</p>
+    </section>
+
+    <section class="block" id="sleep">
+      <h2>B. Alvás <span class="en">(sleep)</span></h2>
+    </section>
+
+    <section class="block" id="events">
+      <h2>C. Eseménynapló <span class="en">(event log)</span></h2>
+      <p class="sub">Az előző nap 0:00-tól a kitöltésig.</p>
+    </section>
+
+    <section class="block" id="compliance">
+      <h2>Protokoll <span class="en">(protocol check)</span></h2>
+    </section>
+
+    <section class="block">
+      <h2>Mentések</h2>
+      <details>
+        <summary>Mentések ezen a telefonon</summary>
+        <p class="hist" id="histInfo"></p>
+        <ul class="hist" id="hist"></ul>
+        <button type="button" class="secondary" id="exportAll">Összes mentés letöltése egy fájlban</button>
+      </details>
+    </section>
+    <footer>Az adat csak ezen a telefonon és a letöltött fájlban van, az oldal semmit nem küld el.
+      Források: SRSS, Kölling és mtsai 2020 (10.1080/02640414.2019.1684790); tételnevek és skála: Brauers és mtsai 2023
+      (10.51224/srxiv.290, CC BY 4.0); leírók: Schneider és mtsai 2020 (10.1371/journal.pone.0244412), Kiel és mtsai 2025
+      (10.1038/s41598-025-09906-y), 10.1002/ejsc.70082. Saját, nem validált magyar fordítás.</footer>
+  </form>
+</main>
+
+<div class="bar">
+  <p class="err" id="err" role="alert"></p>
+  <div class="bar-inner">
+    <span class="progress" id="progress"></span>
+    <button type="button" class="primary" id="save">Mentés</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+const APP_VERSION = "1.1.0";
+const FORM_VERSION = "0.2";
+const SCHEMA_VERSION = 1;
+const STORE_KEY = "self_report_submissions_v1";
+
+// Items, scales and wording: docs/protocol/daily_self_report_form_draft.md v0.2.
+const SRSS = [
+  ["srss_ppc", "Fizikai teljesítőképesség", "Physical Performance Capability",
+    "erős, fizikailag teherbíró, energikus, erőtől duzzadó"],
+  ["srss_mpc", "Mentális teljesítőképesség", "Mental Performance Capability",
+    "fogékony; valószínű: koncentrált, éber"],
+  ["srss_eb", "Érzelmi egyensúly", "Emotional Balance",
+    "elégedett, kiegyensúlyozott, jókedvű, a helyzet ura"],
+  ["srss_or", "Általános regenerálódottság", "Overall Recovery",
+    "regenerálódott, kipihent, izomlazaság, testileg ellazult"],
+  ["srss_ms", "Izomterheltség", "Muscular Stress",
+    "izomkimerültség, izomfáradtság, izomláz, izommerevség"],
+  ["srss_la", "Aktivációhiány", "Lack of Activation", "tunya"],
+  ["srss_nes", "Negatív érzelmi állapot", "Negative Emotional State", "bosszús"],
+  ["srss_os", "Általános stresszterheltség", "Overall Stress",
+    "fáradt, elcsigázott, túlterhelt, testileg kimerült"],
+];
+const RECOVERY_HEAD = "Regeneráció (Recovery)", STRESS_HEAD = "Stressz (Stress)";
+
+// [field, label, english, extra field, extra label, extra input type, extra attrs, required when yes]
+const EVENTS = [
+  ["alcohol", "Alkoholfogyasztás", "alcohol intake",
+    "alcohol_std_drinks", "Italegység (standard drinks)", "number", {min: 0, step: 0.5, inputmode: "decimal"}, true],
+  ["caffeine", "Koffeinbevitel", "caffeine intake",
+    "caffeine_last_local", "Utolsó bevitel időpontja (time of last intake)", "time", {}, true],
+  ["illness", "Betegség vagy betegségtünet", "illness or symptoms",
+    "illness_note", "Rövid leírás (short description)", "text", {maxlength: 200}, false],
+  ["travel", "Utazás", "travel",
+    "travel_tz_change_h", "Időzóna-váltás, óra, kelet felé + (time-zone change, h)", "number", {step: 1, inputmode: "numeric"}, false],
+  ["bedroom_ventilation", "Szellőztetés, ablaknyitás a hálószobában", "bedroom ventilation, window opening",
+    "bedroom_ventilation_min", "Időtartam, perc (duration, min)", "number", {min: 0, step: 1, inputmode: "numeric"}, false],
+  ["guests", "Vendég a lakásban", "guests in the home"],
+  ["cleaning_chemicals", "Takarítás, vegyszerhasználat", "cleaning, chemical use"],
+  ["unusual_load", "Szokatlan fizikai terhelés", "unusual physical load",
+    "unusual_load_note", "Rövid leírás (short description)", "text", {maxlength: 200}, false],
+];
+
+const COLUMNS = ["schema_version", "form_version", "app_version", "report_date_local",
+  "submitted_at_utc", "utc_offset_min", "viewed_data_before",
+  ...SRSS.map(s => s[0]), "sleep_quality",
+  "alcohol", "alcohol_std_drinks", "caffeine", "caffeine_last_local", "illness", "illness_note",
+  "travel", "travel_tz_change_h", "bedroom_ventilation", "bedroom_ventilation_min", "guests",
+  "cleaning_chemicals", "unusual_load", "unusual_load_note"];
+const TEXT_COLUMNS = new Set(["form_version", "app_version", "illness_note", "unusual_load_note"]);
+const REQUIRED = ["viewed_data_before", ...SRSS.map(s => s[0]), "sleep_quality", ...EVENTS.map(e => e[0])];
+
+const $ = id => document.getElementById(id);
+
+function el(tag, attrs = {}, ...children) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") n.className = v; else n.setAttribute(k, v);
+  }
+  for (const c of children) n.append(c);
+  return n;
+}
+
+function scale(name, values, labels) {
+  const box = el("div", {class: `scale scale-${values.length}`, id: `g_${name}`, role: "radiogroup"});
+  values.forEach((v, i) => {
+    const id = `${name}_${v}`;
+    box.append(el("input", {type: "radio", name, id, value: String(v)}),
+               el("label", {for: id}, labels ? labels[i] : String(v)));
+  });
+  return box;
+}
+
+function build() {
+  const srss = $("srss");
+  SRSS.forEach(([name, hu, en, desc], i) => {
+    if (i === 0 || i === 4) srss.append(el("p", {class: "group"},
+      i === 0 ? RECOVERY_HEAD : STRESS_HEAD));
+    const ends = el("div", {class: "ends"},
+      el("span", {}, "0 = egyáltalán nem jellemző"), el("span", {}, "6 = teljes mértékben jellemző"));
+    srss.append(el("div", {class: "item"},
+      el("div", {class: "item-title"}, `${i + 1}. ${hu} `, el("span", {class: "en"}, `(${en})`)),
+      el("div", {class: "desc"}, desc),
+      scale(name, [0, 1, 2, 3, 4, 5, 6]), ends));
+  });
+
+  $("sleep").append(el("div", {class: "item"},
+    el("div", {class: "item-title"}, "Milyennek értékeled az éjszakai alvásod minőségét? ",
+      el("span", {class: "en"}, "(How would you rate the quality of your sleep?)")),
+    scale("sleep_quality", [1, 2, 3, 4, 5]),
+    el("div", {class: "ends"}, el("span", {}, "1 = nagyon rossz"), el("span", {}, "5 = nagyon jó"))));
+
+  const ev = $("events");
+  for (const [name, hu, en, xName, xLabel, xType, xAttrs, xReq] of EVENTS) {
+    const item = el("div", {class: "item"},
+      el("div", {class: "item-title"}, `${hu} `, el("span", {class: "en"}, `(${en})`)),
+      scale(name, ["no", "yes"], ["nem", "igen"]));
+    if (xName) {
+      const input = el("input", {type: xType, id: xName, name: xName, ...xAttrs});
+      const extra = el("div", {class: "extra", id: `x_${xName}`},
+        el("label", {for: xName}, xLabel + (xReq ? " *" : "")), input);
+      item.append(extra);
+      item.addEventListener("change", e => {
+        if (e.target.name === name) extra.classList.toggle("show", e.target.value === "yes");
+      });
+    }
+    ev.append(item);
+  }
+
+  $("compliance").append(el("div", {class: "item"},
+    el("div", {class: "item-title"}, "Megnézted ma már a Garmin- vagy az Atmocube-adatot a kitöltés előtt? ",
+      el("span", {class: "en"}, "(Did you look at Garmin or Atmocube data before filling in?)")),
+    scale("viewed_data_before", ["no", "yes"], ["nem", "igen"])));
+}
+
+function pad(n) { return String(n).padStart(2, "0"); }
+function localDate(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+function compactUtc(iso) { return iso.replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z"); }
+
+function radioValue(name) {
+  const c = document.querySelector(`input[name="${name}"]:checked`);
+  return c ? c.value : "";
+}
+
+function collect() {
+  const now = new Date();
+  const iso = new Date(Math.floor(now.getTime() / 1000) * 1000).toISOString().replace(".000Z", "Z");
+  const row = {
+    schema_version: String(SCHEMA_VERSION), form_version: FORM_VERSION, app_version: APP_VERSION,
+    report_date_local: localDate(now), submitted_at_utc: iso,
+    utc_offset_min: String(-now.getTimezoneOffset()),
+  };
+  for (const name of REQUIRED) row[name] = radioValue(name);
+  for (const [name, , , xName] of EVENTS) {
+    if (!xName) continue;
+    const v = $(xName).value.trim().replace(/[\r\n]+/g, " ");
+    row[xName] = row[name] === "yes" ? v : "";
+  }
+  return row;
+}
+
+function validate(row) {
+  document.querySelectorAll(".missing").forEach(n => n.classList.remove("missing"));
+  const missing = [];
+  for (const name of REQUIRED) if (!row[name]) { missing.push(name); $(`g_${name}`).classList.add("missing"); }
+  for (const [name, , , xName, , xType, , xReq] of EVENTS) {
+    if (!xName || row[name] !== "yes") continue;
+    const v = row[xName];
+    let bad = xReq && v === "";
+    if (v !== "" && xType === "number") {
+      const num = Number(v);
+      bad = bad || !Number.isFinite(num) || (xName !== "travel_tz_change_h" && num < 0);
+    }
+    if (bad) { missing.push(xName); $(xName).classList.add("missing"); }
+  }
+  return missing;
+}
+
+function csvCell(col, v) {
+  if (TEXT_COLUMNS.has(col)) return `"${String(v).replace(/"/g, '""')}"`;
+  return String(v);
+}
+function toCsv(rows) {
+  return [COLUMNS.join(","), ...rows.map(r => COLUMNS.map(c => csvCell(c, r[c] ?? "")).join(","))].join("\n") + "\n";
+}
+
+function download(name, text) {
+  const blob = new Blob([text], {type: "text/csv;charset=utf-8"});
+  const a = el("a", {href: URL.createObjectURL(blob), download: name});
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+function loadStore() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY) || "[]"); } catch { return []; }
+}
+function saveStore(list) {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(list)); return true; } catch { return false; }
+}
+
+function renderHistory() {
+  const list = loadStore();
+  $("histInfo").textContent = list.length
+    ? `${list.length} mentés. Csak a dátum és az időpont látszik, az értékek nem.`
+    : "Még nincs mentés ezen a telefonon.";
+  const ul = $("hist"); ul.replaceChildren();
+  list.slice(-14).reverse().forEach(r => {
+    const t = new Date(r.submitted_at_utc);
+    ul.append(el("li", {}, `${r.report_date_local} · ${pad(t.getHours())}:${pad(t.getMinutes())}`));
+  });
+  const today = localDate(new Date());
+  const n = list.filter(r => r.report_date_local === today).length;
+  if (n) {
+    $("done").hidden = false;
+    $("done").textContent = `Ma már ${n} mentés készült. Újabb mentés javításnak számít: a feldolgozás a legkésőbbit használja.`;
+  }
+}
+
+function updateProgress() {
+  const filled = REQUIRED.filter(n => radioValue(n)).length;
+  $("progress").textContent = `${filled}/${REQUIRED.length}`;
+}
+
+function showMeta() {
+  const now = new Date();
+  $("meta").textContent = `${localDate(now)} · kitöltőlap v${FORM_VERSION} · app v${APP_VERSION}`;
+  const h = now.getHours();
+  if (h >= 11 || h < 4) {
+    $("late").hidden = false;
+    $("late").textContent = `Most ${pad(h)}:${pad(now.getMinutes())} van. A reggeli kitöltés ablakán kívül vagy; a mentés lehetséges, az időpont rögzül, az elemzés jelöli.`;
+  }
+}
+
+$("save").addEventListener("click", () => {
+  const row = collect();
+  const missing = validate(row);
+  if (missing.length) {
+    $("err").textContent = `Hiányzó vagy hibás mező: ${missing.length}. A pirossal jelölteket töltsd ki.`;
+    document.querySelector(".missing")?.scrollIntoView({behavior: "smooth", block: "center"});
+    return;
+  }
+  $("err").textContent = "";
+  const name = `self_report_${row.report_date_local}_${compactUtc(row.submitted_at_utc)}.csv`;
+  const list = loadStore(); list.push(row);
+  const stored = saveStore(list);
+  download(name, toCsv([row]));
+  $("f").reset();
+  document.querySelectorAll(".extra").forEach(x => x.classList.remove("show"));
+  updateProgress(); renderHistory();
+  $("done").hidden = false;
+  $("done").textContent = `Mentve: ${name}` + (stored ? "" : " (a telefonos másolat nem sikerült, a letöltött fájl megvan)");
+  window.scrollTo({top: 0, behavior: "smooth"});
+});
+
+$("exportAll").addEventListener("click", () => {
+  const list = loadStore();
+  if (!list.length) return;
+  download(`self_report_backup_${compactUtc(new Date().toISOString())}.csv`, toCsv(list));
+});
+
+build(); showMeta(); renderHistory(); updateProgress();
+$("f").addEventListener("change", () => { updateProgress(); $("err").textContent = ""; });
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+</script>
+</body>
+</html>
